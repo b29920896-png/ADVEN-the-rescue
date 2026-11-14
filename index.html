@@ -1,0 +1,378 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>ADVEN - Shadow King's Curse</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body {
+    margin: 0;
+    background: #15101f;
+    color: white;
+    font-family: Arial;
+    text-align: center;
+}
+h1 {
+    color: #d8aaff;
+    font-size: 45px;
+}
+canvas {
+    background: #292039;
+    width: min(96vw, 900px);
+    border: 3px solid #a77bd1;
+    display: block;
+    margin: auto;
+    touch-action: none;
+}
+button {
+    background: #71449b;
+    color: white;
+    border: 2px solid #d8aaff;
+    padding: 12px 25px;
+    margin: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    border-radius: 8px;
+}
+#menu {
+    padding: 20px;
+}
+#game {
+    display: none;
+}
+</style>
+</head>
+<body>
+
+<div id="menu">
+<h1>ADVEN</h1>
+<h2>THE SHADOW KING'S CURSE</h2>
+<p>Choose your hero!</p>
+<button onclick="start('Sir Kael')">SIR KAEL</button>
+<button onclick="start('Lady Aria')">LADY ARIA</button>
+</div>
+
+<div id="game">
+<h2 id="heroName"></h2>
+<canvas id="screen" width="900" height="500"></canvas>
+<p>A/D or arrows: Move | SPACE: Jump | Hold M1: Attack</p>
+<p>K: Power Slash | L: Heal | I: Moonstorm | E: Next room</p>
+<button onclick="restart()">RESTART</button>
+</div>
+
+<script>
+const c = document.getElementById("screen");
+const ctx = c.getContext("2d");
+
+let hero = "";
+let x = 130, y = 400, vy = 0;
+let hp = 300;
+let room = 0;
+let mouse = false;
+let lastAttack = 0;
+let slash = 0;
+let skill = 0;
+let enemies = [];
+let boss = null;
+let keys = {};
+let gameOver = false;
+let victory = false;
+let soulreaver = false;
+
+const rooms = [
+ "Dungeon Entrance",
+ "Iron Chamber",
+ "Cursed Library",
+ "Bloodstone Arena",
+ "Zorak's Main Hall"
+];
+
+const bosses = [
+ ["Varkon - Iron Guardian", 500],
+ ["Nyxara - Shadow Witch", 750],
+ ["Dravok - Beast Knight", 1200],
+ ["Zorak - Shadow King", 2000]
+];
+
+function start(name) {
+ hero = name;
+ document.getElementById("menu").style.display = "none";
+ document.getElementById("game").style.display = "block";
+ document.getElementById("heroName").textContent = hero;
+ restart();
+}
+
+function restart() {
+ x = 130;
+ y = 400;
+ vy = 0;
+ hp = 300;
+ room = 0;
+ gameOver = false;
+ victory = false;
+ soulreaver = false;
+ loadRoom();
+}
+
+function loadRoom() {
+ enemies = [];
+ boss = null;
+
+ if (room === 0) {
+   for (let i = 0; i < 4; i++) {
+     enemies.push({x:430+i*110,hp:100,max:100});
+   }
+ } else {
+   boss = {
+     x:730,
+     name:bosses[room-1][0],
+     hp:bosses[room-1][1],
+     max:bosses[room-1][1]
+   };
+ }
+}
+
+function attack() {
+ let now = Date.now();
+ if (now-lastAttack < 350) return;
+ lastAttack = now;
+ slash = 15;
+
+ let damage = soulreaver ? 90 : 45;
+
+ enemies.forEach(e => {
+   if (Math.abs(e.x-x)<120) e.hp -= damage;
+ });
+ enemies = enemies.filter(e=>e.hp>0);
+
+ if (boss && Math.abs(boss.x-x)<145) {
+   boss.hp -= damage;
+   if (boss.hp <= 0) {
+     if (room === 2) soulreaver = true;
+     boss = null;
+   }
+ }
+}
+
+function useSkill(k) {
+ if (k === "k") {
+   skill = 20;
+   enemies.forEach(e=>e.hp-=110);
+   if (boss) boss.hp-=110;
+ }
+ if (k === "l") {
+   skill = 20;
+   hp = Math.min(300,hp+50);
+ }
+ if (k === "i") {
+   skill = 25;
+   enemies.forEach(e=>e.hp-=170);
+   if (boss) boss.hp-=170;
+ }
+ enemies = enemies.filter(e=>e.hp>0);
+ if (boss && boss.hp<=0) {
+   if (room === 2) soulreaver = true;
+   boss = null;
+ }
+}
+
+function nextRoom() {
+ if (enemies.length===0 && boss===null && room<4) {
+   room++;
+   x=130;
+   loadRoom();
+ }
+}
+
+function rect(x,y,w,h,color) {
+ ctx.fillStyle=color;
+ ctx.fillRect(x,y,w,h);
+}
+
+function bar(x,y,w,h,value,max,color) {
+ rect(x,y,w,h,"#33283e");
+ rect(x,y,w*Math.max(0,value/max),h,color);
+ ctx.strokeStyle="white";
+ ctx.strokeRect(x,y,w,h);
+}
+
+function drawHero() {
+ ctx.save();
+ ctx.translate(x,y);
+
+ let cape = hero==="Sir Kael" ? "#2764b2" : "#8539b5";
+
+ // Cape
+ ctx.fillStyle=cape;
+ ctx.beginPath();
+ ctx.moveTo(-12,-75);
+ ctx.lineTo(-42,-20);
+ ctx.lineTo(8,-10);
+ ctx.closePath();
+ ctx.fill();
+
+ // Armour
+ rect(-17,-68,34,48,"#b7c3d3");
+
+ // Closed helmet
+ rect(-16,-101,32,34,"#d5dfed");
+ rect(-12,-88,24,7,"#15101f");
+
+ // Legs
+ rect(-13,-20,10,20,"#8491a3");
+ rect(3,-20,10,20,"#8491a3");
+
+ // Sword
+ ctx.strokeStyle="#f1f5ff";
+ ctx.lineWidth=7;
+ ctx.beginPath();
+ ctx.moveTo(12,-53);
+ ctx.lineTo(55,-82);
+ ctx.stroke();
+
+ if (slash>0) {
+   ctx.strokeStyle="#fff17b";
+   ctx.lineWidth=10;
+   ctx.beginPath();
+   ctx.arc(50,-65,65,-1,1);
+   ctx.stroke();
+   ctx.fillStyle="#fff17b";
+   ctx.font="bold 20px Arial";
+   ctx.fillText("SLASH!",35,-140);
+ }
+ if(skill>0) {
+   ctx.strokeStyle="#b8eaff";
+   ctx.lineWidth=7;
+   ctx.beginPath();
+   ctx.arc(0,-60,85,0,Math.PI*2);
+   ctx.stroke();
+ }
+ ctx.restore();
+}
+
+function draw() {
+ ctx.clearRect(0,0,900,500);
+
+ let g=ctx.createLinearGradient(0,0,0,500);
+ g.addColorStop(0,"#171321");
+ g.addColorStop(1,"#49334e");
+ ctx.fillStyle=g;
+ ctx.fillRect(0,0,900,500);
+
+ // Dungeon floor
+ rect(0,430,900,70,"#514052");
+
+ // Dungeon pillars
+ for(let i=30;i<900;i+=180) {
+   rect(i,90,30,340,"#30263b");
+ }
+
+ drawHero();
+
+ enemies.forEach(e=>{
+   rect(e.x-16,350,32,80,"#983c50");
+   rect(e.x-14,330,28,25,"#575367");
+   bar(e.x-20,315,40,6,e.hp,e.max,"#f44");
+ });
+
+ if(boss) {
+   rect(boss.x-40,290,80,140,"#692b80");
+   rect(boss.x-34,245,68,50,"#302035");
+   rect(boss.x-25,265,50,7,"#ff45db");
+
+   ctx.fillStyle="white";
+   ctx.font="bold 20px Arial";
+   ctx.textAlign="center";
+   ctx.fillText(boss.name,450,30);
+   bar(220,45,460,20,boss.hp,boss.max,"#b44bd7");
+ }
+
+ bar(20,25,170,17,hp,300,"#35d879");
+
+ ctx.textAlign="center";
+ ctx.fillStyle="white";
+ ctx.font="bold 20px Arial";
+ ctx.fillText(rooms[room],450,480);
+
+ if(soulreaver) {
+   ctx.fillStyle="#d58aff";
+   ctx.fillText("SOULREAVER",790,25);
+ }
+
+ if(gameOver) {
+   ctx.fillStyle="white";
+   ctx.font="bold 40px Arial";
+   ctx.fillText("DEFEATED - PRESS R",450,230);
+ }
+ if(victory) {
+   ctx.fillStyle="#f6d77a";
+   ctx.font="bold 48px Arial";
+   ctx.fillText("VICTORY!",450,220);
+   ctx.font="22px Arial";
+   ctx.fillText("Princess Elara is rescued!",450,270);
+ }
+}
+
+function loop() {
+ if(document.getElementById("game").style.display==="block") {
+   if(!gameOver&&!victory) {
+     if(keys.a||keys.ArrowLeft) x-=4;
+     if(keys.d||keys.ArrowRight) x+=4;
+
+     x=Math.max(25,Math.min(875,x));
+
+     vy+=0.6;
+     y+=vy;
+     if(y>400){y=400;vy=0;}
+
+     if(mouse) attack();
+
+     slash=Math.max(0,slash-1);
+     skill=Math.max(0,skill-1);
+
+     enemies.forEach(e=>{
+       if(Math.abs(e.x-x)<45) hp-=0.15;
+       else e.x+=Math.sign(x-e.x)*0.25;
+     });
+
+     if(boss && Math.abs(boss.x-x)<90) hp-=0.35;
+
+     if(hp<=0) {
+       hp=0;
+       gameOver=true;
+     }
+
+     if(room===4 && !boss && enemies.length===0) victory=true;
+   }
+   draw();
+ }
+ requestAnimationFrame(loop);
+}
+
+window.addEventListener("keydown",e=>{
+ let k=e.key===" "?"Space":e.key;
+ keys[k]=true;
+
+ if(k==="Space" && y>=400) vy=-12;
+ if(["k","l","i"].includes(k.toLowerCase())) useSkill(k.toLowerCase());
+ if(k.toLowerCase()==="e") nextRoom();
+
+ if(k.toLowerCase()==="r" && (gameOver||victory)) restart();
+});
+
+window.addEventListener("keyup",e=>{
+ let k=e.key===" "?"Space":e.key;
+ keys[k]=false;
+});
+
+c.addEventListener("pointerdown",()=>{
+ mouse=true;
+ attack();
+});
+
+window.addEventListener("pointerup",()=>mouse=false);
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
